@@ -1,0 +1,104 @@
+body {
+  font-family: "Kanit", sans-serif;
+  background-color: #f0f2f5;
+}
+.nav-link.active {
+  color: #2563eb; /* blue-600 */
+  border-bottom: 2px solid #3b82f6; /* blue-500 */
+}
+.tab-button.active {
+  border-color: #3b82f6;
+  color: #2563eb;
+  background-color: #eff6ff;
+}
+.benefit-card {
+  background-color: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.benefit-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+.benefit-card h3 {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.condition-list li {
+  position: relative;
+  padding-left: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+.condition-list li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  color: #16a34a;
+  font-weight: bold;
+  font-size: 1.25rem;
+}
+.table-responsive {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+}
+th,
+td {
+  white-space: nowrap;
+  padding: 0.75rem 1rem;
+}
+thead th {
+  background-color: #f9fafb;
+}
+.google-visualization-orgchart-node {
+  border-radius: 8px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff;
+}
+.position-text {
+  color: #475569;
+  font-size: 0.8rem;
+}
+.name-text {
+  color: #1e293b;
+  font-weight: 600;
+}
+.modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+.modal-content {
+  max-height: 90vh;
+}
+.control-panel select,
+.control-panel input {
+  border-color: #d1d5db;
+}
+.details-popover {
+  position: absolute;
+  background-color: #fff;
+  border: 1px solid #e2e8f0;
+  padding: 1rem;
+  z-index: 100;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  width: 320px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+  transform: translate(20px, -50%);
+  font-size: 0.8rem;
+}
+.details-icon-container:hover .details-popover {
+  opacity: 1;
+  visibility: visible;
+}
