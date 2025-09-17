@@ -4055,5 +4055,294 @@
         google.charts.setOnLoadCallback(() => App.init());
       });
     </script>
+    <script>
+      // ---- Patch: CSV parser helpers + AE calculations wiring (v0.3) ----
+      (function () {
+        // Minimal robust CSV parser (quotes/commas/CRLF)
+        function csvParseRows(text) {
+          if (!text) return [];
+          text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+          const rows = [];
+          let row = [];
+          let field = "";
+          let inQuotes = false;
+          for (let i = 0; i < text.length; i++) {
+            const c = text[i];
+            if (inQuotes) {
+              if (c === '"') {
+                if (i + 1 < text.length && text[i + 1] === '"') {
+                  field += '"';
+                  i++;
+                } else {
+                  inQuotes = false;
+                }
+              } else {
+                field += c;
+              }
+            } else {
+              if (c === '"') inQuotes = true;
+              else if (c === ",") {
+                row.push(field);
+                field = "";
+              } else if (c === "\n") {
+                row.push(field);
+                rows.push(row);
+                row = [];
+                field = "";
+              } else {
+                field += c;
+              }
+            }
+          }
+          if (field.length > 0 || row.length > 0) {
+            row.push(field);
+            rows.push(row);
+          }
+          return rows;
+        }
+        function csvParseWithHeader(text) {
+          const rows = csvParseRows(text).filter(
+            (r) => r.length && r.join("").trim().length
+          );
+          if (rows.length === 0) return { headers: [], rows: [] };
+          const headers = rows[0].map((h) => (h || "").trim());
+          const data = rows.slice(1);
+          return { headers, rows: data };
+        }
+        if (window.App && App.utils) {
+          App.utils.csvParseRows = csvParseRows;
+          App.utils.csvParseWithHeader = csvParseWithHeader;
+        }
+
+        // Patch TEAM import -> use robust CSV
+        if (window.App && App.team) {
+          const t = App.team;
+          if (typeof t.handleImport === "function") {
+            t.handleImport = function (event) {
+              const file = event.target.files && event.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const text = e.target.result;
+                App.ui.showConfirm(
+                  "ยืนยันการนำเข้าข้อมูล",
+                  "การนำเข้าข้อมูลจะลบข้อมูลทีมและข้อมูลผลงานปัจจุบันทั้งหมด คุณต้องการดำเนินการต่อหรือไม่?",
+                  () => {
+                    try {
+                      const { headers, rows } = csvParseWithHeader(text);
+                      const hmap = {};
+                      headers.forEach(
+                        (h, i) => (hmap[h.trim().toLowerCase()] = i)
+                      );
+                      const get = (row, key, def = "") => {
+                        const i = hmap[key];
+                        const v =
+                          i != null && row[i] != null ? row[i].trim() : "";
+                        return v === "" ? def : v;
+                      };
+                      const members = [];
+                      for (const row of rows) {
+                        const firstName =
+                          get(row, "firstname") || get(row, "ชื่อ") || "";
+                        const lastName =
+                          get(row, "lastname") || get(row, "นามสกุล") || "";
+                        const position =
+                          get(row, "position") || get(row, "ตำแหน่ง") || "";
+                        const persist =
+                          parseFloat(get(row, "persistencyrate", "100")) || 100;
+                        const startDate = get(row, "agentstartdate") || "";
+                        const upline = get(row, "uplineid") || "";
+                        const obj = {
+                          id: undefined,
+                          firstName,
+                          lastName,
+                          position,
+                          persistencyRate: persist,
+                          agentStartDate: startDate,
+                          uplineId: upline ? parseInt(upline, 10) : null,
+                        };
+                        if ((obj.firstName || obj.lastName) && obj.position)
+                          members.push(obj);
+                      }
+                      // regenerate IDs
+                      members.forEach((m, i) => (m.id = i + 1));
+                      App.state.teamMembers = members;
+                      App.state.productionLog = [];
+                      App.utils.saveState();
+                      this.renderAll();
+                      App.production.renderAllUI();
+                      App.calculator.populateSelectors();
+                      App.ui.showCustomAlert(
+                        "สำเร็จ",
+                        `นำเข้าข้อมูลทีม ${members.length} รายการเรียบร้อย`
+                      );
+                    } catch (err) {
+                      console.error(err);
+                      App.ui.showCustomAlert(
+                        "เกิดข้อผิดพลาด",
+                        "ไฟล์ CSV ไม่ถูกต้องหรือรูปแบบไม่รองรับ"
+                      );
+                    }
+                  }
+                );
+              };
+              reader.readAsText(file, "utf-8");
+            };
+          }
+        }
+
+        // Patch PRODUCTION import -> use robust CSV
+        if (window.App && App.production) {
+          const p = App.production;
+          if (typeof p.handleImport === "function") {
+            p.handleImport = function (event) {
+              const file = event.target.files && event.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const text = e.target.result;
+                App.ui.showConfirm(
+                  "ยืนยันการนำเข้าข้อมูลผลงาน",
+                  "การนำเข้าข้อมูลจะลบข้อมูลผลงานปัจจุบันทั้งหมด คุณต้องการดำเนินการต่อหรือไม่?",
+                  () => {
+                    try {
+                      const { headers, rows } = csvParseWithHeader(text);
+                      const hmap = {};
+                      headers.forEach(
+                        (h, i) => (hmap[h.trim().toLowerCase()] = i)
+                      );
+                      const get = (row, key, def = "") => {
+                        const i = hmap[key];
+                        const v =
+                          i != null && row[i] != null ? row[i].trim() : "";
+                        return v === "" ? def : v;
+                      };
+                      const agentByName = new Map(
+                        App.state.teamMembers.map((m) => [
+                          `${m.firstName} ${m.lastName}`.trim(),
+                          m.id,
+                        ])
+                      );
+                      const out = [];
+                      let nextId = 1;
+                      for (const row of rows) {
+                        const policyDate =
+                          get(row, "policydate") ||
+                          get(row, "วันที่") ||
+                          get(row, "date");
+                        const agentName =
+                          get(row, "agentname") ||
+                          get(row, "ตัวแทน") ||
+                          get(row, "agent");
+                        const agentIdStr = get(row, "agentid");
+                        let agentId = agentIdStr
+                          ? parseInt(agentIdStr, 10)
+                          : agentByName.get(agentName) || null;
+                        if (!agentId || isNaN(agentId)) continue;
+                        const clientName =
+                          get(row, "clientname") || get(row, "ลูกค้า") || "";
+                        const policyType =
+                          get(row, "policytype") || get(row, "แบบประกัน") || "";
+                        const fyp = parseFloat(get(row, "fyp", "0")) || 0;
+                        const afypRate =
+                          parseFloat(get(row, "afyprate", "0")) || 0;
+                        const fycRate =
+                          parseFloat(get(row, "fycrate", "0")) || 0;
+                        out.push({
+                          id: nextId++,
+                          policyDate,
+                          agentId,
+                          clientName,
+                          policyType,
+                          fyp,
+                          afypRate,
+                          fycRate,
+                        });
+                      }
+                      App.state.productionLog = out;
+                      App.utils.saveState();
+                      this.renderAllUI();
+                      App.calculator.populateSelectors();
+                      App.ui.showCustomAlert(
+                        "สำเร็จ",
+                        `นำเข้าผลงาน ${out.length} รายการเรียบร้อย`
+                      );
+                    } catch (err) {
+                      console.error(err);
+                      App.ui.showCustomAlert(
+                        "เกิดข้อผิดพลาด",
+                        "ไฟล์ CSV ไม่ถูกต้องหรือรูปแบบไม่รองรับ"
+                      );
+                    }
+                  }
+                );
+              };
+              reader.readAsText(file, "utf-8");
+            };
+          }
+        }
+
+        // Wire AE calculations into engine
+        if (window.App && App.calculator && App.calculator.engine) {
+          const eng = App.calculator.engine;
+          if (typeof eng.calculateForMember === "function") {
+            const originalCalc = eng.calculateForMember.bind(eng);
+            eng.calculateForMember = function (member, year, period) {
+              let results = originalCalc(member, year, period) || [];
+              const aePositions = ["AVP", "VP", "SVP"];
+              if (aePositions.includes(member.position)) {
+                const { startDate, endDate } = this.getPeriodDateRange(
+                  year,
+                  period
+                );
+                // AE direct line (exclude self)
+                const directIds = (
+                  this.getAeDirectLineMemberIds
+                    ? this.getAeDirectLineMemberIds(member.id)
+                    : [member.id]
+                ).filter((id) => id !== member.id);
+                const directProd = App.state.productionLog.filter(
+                  (p) =>
+                    directIds.includes(p.agentId) &&
+                    new Date(p.policyDate) >= startDate &&
+                    new Date(p.policyDate) <= endDate
+                );
+                if (typeof this.calculateAeDirectOverriding === "function") {
+                  const r1 = this.calculateAeDirectOverriding(
+                    member,
+                    directProd
+                  );
+                  if (r1 && r1.amount > 0) results.push(r1);
+                }
+                // AE Production Bonus (Yearly) — only when period is "year"
+                if (
+                  period === "year" &&
+                  typeof this.calculateAeYearlyBonus === "function"
+                ) {
+                  const entireIds = (
+                    this.getAeEntireLineMemberIds
+                      ? this.getAeEntireLineMemberIds(member.id)
+                      : [member.id]
+                  ).filter((id) => id !== member.id);
+                  const lineProd = App.state.productionLog.filter((p) => {
+                    const d = new Date(p.policyDate);
+                    return (
+                      entireIds.includes(p.agentId) && d.getFullYear() === year
+                    );
+                  });
+                  const r2 = this.calculateAeYearlyBonus(
+                    member,
+                    lineProd,
+                    year
+                  );
+                  if (r2 && r2.amount > 0) results.push(r2);
+                }
+              }
+              return results.filter((r) => r && r.amount > 0);
+            };
+          }
+        }
+      })();
+    </script>
   </body>
 </html>
