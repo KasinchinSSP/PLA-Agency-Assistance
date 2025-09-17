@@ -1639,6 +1639,12 @@
                   >
                     Export CSV
                   </button>
+                  <button
+                    id="run-prod-selftest-btn"
+                    class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-300"
+                  >
+                    Run CRUD Self‑Test
+                  </button>
                 </div>
                 <input
                   type="file"
@@ -3475,6 +3481,8 @@
             importBtn: document.getElementById("import-prod-csv-btn"),
             importInput: document.getElementById("import-prod-csv-input"),
             exportBtn: document.getElementById("export-prod-csv-btn"),
+
+            selfTestBtn: document.getElementById("run-prod-selftest-btn"),
           },
 
           init() {
@@ -3516,6 +3524,12 @@
               this.exportToCsv()
             );
 
+            // Self‑Test
+            if (this.elements.selfTestBtn) {
+              this.elements.selfTestBtn.addEventListener("click", () =>
+                this.runCrudSelfTest()
+              );
+            }
             this.renderAllUI();
           },
 
@@ -3531,10 +3545,111 @@
             this.renderTable(filteredData);
           },
 
+          // --- Automated CRUD Self‑Test ---
+          _testLog: [],
+          _log(msg) {
+            this._testLog.push(msg);
+          },
+          _assert(condition, label) {
+            this._log(`${condition ? "✅" : "❌"} ${label}`);
+            if (!condition) this._hasFailure = true;
+          },
+          runCrudSelfTest() {
+            try {
+              this._testLog = [];
+              this._hasFailure = false;
+              const origLen = App.state.productionLog.length;
+              // Pick an existing agent or create a stub agent if none
+              if (
+                !App.state.teamMembers ||
+                App.state.teamMembers.length === 0
+              ) {
+                // create a minimal agent to attach sales to
+                const newId = 1;
+                App.state.teamMembers = [
+                  {
+                    id: newId,
+                    firstName: "TEST",
+                    lastName: "AGENT",
+                    position: "AG",
+                    uplineId: null,
+                    agentStartDate: new Date().toISOString().split("T")[0],
+                    persistencyRate: 100,
+                  },
+                ];
+              }
+              const agentId = App.state.teamMembers[0].id;
+              // 1) ADD
+              const testName = "TEST_CRUD_" + Date.now();
+              document.getElementById("production-id").value = "";
+              document.getElementById("policyDate").value = new Date()
+                .toISOString()
+                .split("T")[0];
+              document.getElementById("agentId").value = agentId;
+              document.getElementById("clientName").value = testName;
+              document.getElementById("policyType").value = "Unit Linked";
+              document.getElementById("fyp").value = 100000;
+              document.getElementById("afypRate").value = 100;
+              document.getElementById("fycRate").value = 30;
+              this.calculateAfyp();
+              this.handleSubmit({ preventDefault: () => {} });
+
+              const added = App.state.productionLog.find(
+                (p) => p.clientName === testName
+              );
+              this._assert(!!added, "เพิ่มรายการผลงาน (ADD)");
+              const addedId = added ? added.id : null;
+
+              // 2) EDIT
+              if (addedId != null) {
+                this.handleEdit(addedId);
+                document.getElementById("fyp").value = 120000;
+                this.calculateAfyp();
+                this.handleSubmit({ preventDefault: () => {} });
+                const edited = App.state.productionLog.find(
+                  (p) => p.id === addedId
+                );
+                this._assert(
+                  edited && edited.fyp === 120000,
+                  "แก้ไขรายการผลงาน (EDIT)"
+                );
+              } else {
+                this._log("ข้ามขั้นตอน EDIT เนื่องจาก ADD ไม่สำเร็จ");
+              }
+
+              // 3) DELETE (quiet, no confirm)
+              if (addedId != null) {
+                const prevLen = App.state.productionLog.length;
+                App.state.productionLog = App.state.productionLog.filter(
+                  (p) => p.id !== addedId
+                );
+                App.utils.saveState();
+                this.renderAllUI();
+                this._assert(
+                  App.state.productionLog.length === prevLen - 1,
+                  "ลบรายการผลงาน (DELETE)"
+                );
+              }
+
+              // Final check
+              this._assert(
+                App.state.productionLog.length === origLen,
+                "จำนวนรายการกลับสู่เดิม (CLEANUP)"
+              );
+
+              const html = this._testLog.join("<br>");
+              App.ui.showCustomAlert("ผลการทดสอบ CRUD", html);
+            } catch (err) {
+              console.error("SelfTest Error", err);
+              App.ui.showCustomAlert("Self‑Test ล้มเหลว", String(err));
+            }
+          },
+
           calculateAfyp() {
-            const fyp = parseFloat(document.getElementById("fyp").value) || 0;
+            const fyp =
+              parseFloat(document.getElementById("fyp").value) || 0 || 0;
             const afypRate =
-              parseFloat(document.getElementById("afypRate").value) || 0;
+              parseFloat(document.getElementById("afypRate").value) || 0 || 0;
             const afyp = fyp * (afypRate / 100);
             document.getElementById("afyp").value =
               afyp.toLocaleString("th-TH");
@@ -3548,9 +3663,11 @@
               agentId: parseInt(document.getElementById("agentId").value, 10),
               clientName: document.getElementById("clientName").value.trim(),
               policyType: document.getElementById("policyType").value.trim(),
-              fyp: parseFloat(document.getElementById("fyp").value),
-              afypRate: parseFloat(document.getElementById("afypRate").value),
-              fycRate: parseFloat(document.getElementById("fycRate").value),
+              fyp: parseFloat(document.getElementById("fyp").value) || 0,
+              afypRate:
+                parseFloat(document.getElementById("afypRate").value) || 0,
+              fycRate:
+                parseFloat(document.getElementById("fycRate").value) || 0,
             };
 
             if (id) {
