@@ -720,9 +720,10 @@
           try {
             const res = await fetch(WEBHOOK_URL, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify(payload),
             });
+
             const data = await res.json().catch(() => ({}));
             const ok = res.ok && data.ok !== false;
             if (!ok) throw new Error(data.message || "Submit failed");
