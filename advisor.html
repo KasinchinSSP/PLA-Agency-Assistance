@@ -56,71 +56,71 @@
     <!-- Progress (5 steps) -->
     <div class="max-w-xl mx-auto px-4">
       <div class="w-full bg-brand-200 rounded-full h-2 overflow-hidden">
-        <div id="progress" class="h-2 bg-brand-900 w-1/5 transition-all"></div>
+        <div id="progress" class="h-2 bg-brand-900 w-1/4 transition-all"></div>
       </div>
       <div class="flex justify-between text-[11px] text-brand-600 mt-1">
-        <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+        <span>1</span><span>2</span><span>3</span><span>4</span>
       </div>
     </div>
 
     <main class="max-w-xl mx-auto px-4 py-4">
-      <!-- STEP 1: Gender -->
+      <!-- STEP 1: Gender + DOB -->
       <section id="step-1" data-step="1" class="step">
-        <div class="bg-white border border-brand-200 rounded-2xl p-5">
-          <h2 class="text-base font-semibold mb-3">คุณเป็นเพศใด</h2>
-          <div
-            class="grid grid-cols-2 gap-2"
-            role="group"
-            aria-label="เลือกเพศ"
-          >
-            <button
-              type="button"
-              data-gender="M"
-              class="gender-btn py-3 rounded-xl border border-brand-300 bg-white"
+        <div class="bg-white border border-brand-200 rounded-2xl p-5 space-y-5">
+          <div>
+            <h2 class="text-base font-semibold mb-3">คุณเป็นเพศใด</h2>
+            <div
+              class="grid grid-cols-2 gap-2"
+              role="group"
+              aria-label="เลือกเพศ"
             >
-              ชาย
-            </button>
-            <button
-              type="button"
-              data-gender="F"
-              class="gender-btn py-3 rounded-xl border border-brand-300 bg-white"
-            >
-              หญิง
-            </button>
+              <button
+                type="button"
+                data-gender="M"
+                class="gender-btn py-3 rounded-xl border border-brand-300 bg-white"
+              >
+                ชาย
+              </button>
+              <button
+                type="button"
+                data-gender="F"
+                class="gender-btn py-3 rounded-xl border border-brand-300 bg-white"
+              >
+                หญิง
+              </button>
+            </div>
+            <input type="hidden" id="insured_gender" name="insured.gender" />
+            <p id="err-gender" class="text-xs text-red-600 mt-2 hidden">
+              กรุณาเลือกเพศ
+            </p>
           </div>
-          <input type="hidden" id="insured_gender" name="insured.gender" />
-          <p id="err-gender" class="text-xs text-red-600 mt-2 hidden">
-            กรุณาเลือกเพศ
-          </p>
-        </div>
-        <div class="h-16"></div>
-      </section>
 
-      <!-- STEP 2: DOB -->
-      <section id="step-2" data-step="2" class="step hidden">
-        <div class="bg-white border border-brand-200 rounded-2xl p-5">
-          <h2 class="text-base font-semibold mb-3">วันเกิดของคุณ (ค.ศ.)</h2>
-          <div class="grid grid-cols-3 gap-2">
-            <select
-              id="insured_dob_d"
-              name="insured.dob.d"
-              class="w-full rounded-xl border border-brand-300 p-3 bg-white"
-            ></select>
-            <select
-              id="insured_dob_m"
-              name="insured.dob.m"
-              class="w-full rounded-xl border border-brand-300 p-3 bg-white"
-            ></select>
-            <select
-              id="insured_dob_y"
-              name="insured.dob.y"
-              class="w-full rounded-xl border border-brand-300 p-3 bg-white"
-            ></select>
+          <div class="pt-2 border-t border-brand-100">
+            <h2 class="text-base font-semibold mb-3">วันเกิดของคุณ (ค.ศ.)</h2>
+            <div class="grid grid-cols-3 gap-2">
+              <select
+                id="insured_dob_d"
+                name="insured.dob.d"
+                class="w-full rounded-xl border border-brand-300 p-3 bg-white"
+              ></select>
+              <select
+                id="insured_dob_m"
+                name="insured.dob.m"
+                class="w-full rounded-xl border border-brand-300 p-3 bg-white"
+              ></select>
+              <select
+                id="insured_dob_y"
+                name="insured.dob.y"
+                class="w-full rounded-xl border border-brand-300 p-3 bg-white"
+              ></select>
+            </div>
+            <p class="text-xs text-brand-500 mt-2">
+              ใช้ปี <b>ค.ศ.</b> เช่น 1992
+            </p>
+            <p id="err-dob" class="text-xs text-red-600 mt-2 hidden">
+              กรุณาระบุวัน/เดือน/ปี ค.ศ. ให้ครบถ้วน
+            </p>
           </div>
-          <p class="text-xs text-brand-500 mt-2">ใช้ปี <b>ค.ศ.</b> เช่น 1992</p>
-          <p id="err-dob" class="text-xs text-red-600 mt-2 hidden">
-            กรุณาระบุวัน/เดือน/ปี ค.ศ. ให้ครบถ้วน
-          </p>
         </div>
         <div class="h-16"></div>
       </section>
@@ -616,47 +616,52 @@
         }; // show only in debug
 
         /* ---------- Validation per step ---------- */
+        // STEP 1: เพศ + DOB
         const validateStep1 = () => {
-          const ok = !!$("#insured_gender").value;
-          $("#err-gender").classList.toggle("hidden", ok);
-          return ok;
+          const gOk = !!document.querySelector("#insured_gender").value;
+          document.querySelector("#err-gender").classList.toggle("hidden", gOk);
+          const d = document.querySelector("#insured_dob_d").value;
+          const m = document.querySelector("#insured_dob_m").value;
+          const y = document.querySelector("#insured_dob_y").value;
+          const dobOk = !!(d && m && y);
+          document.querySelector("#err-dob").classList.toggle("hidden", dobOk);
+          return gOk && dobOk;
         };
+        // STEP 2: แผน
         const validateStep2 = () => {
-          const d = $("#insured_dob_d").value,
-            m = $("#insured_dob_m").value,
-            y = $("#insured_dob_y").value;
-          const ok = !!(d && m && y);
-          $("#err-dob").classList.toggle("hidden", ok);
+          const ok = !!document.querySelector("#plan_code").value;
+          document.querySelector("#err-plan").classList.toggle("hidden", ok);
           return ok;
         };
+        // STEP 3: ทุนเอาประกัน
         const validateStep3 = () => {
-          const ok = !!$("#plan_code").value;
-          $("#err-plan").classList.toggle("hidden", ok);
-          return ok;
-        };
-        const validateStep4 = () => {
-          const sa = $("#plan_sumAssured").value.trim();
+          const sa = document.querySelector("#plan_sumAssured").value.trim();
           const ok = /^[0-9]+$/.test(sa);
-          $("#err-sa").classList.toggle("hidden", ok);
+          document.querySelector("#err-sa").classList.toggle("hidden", ok);
           return ok;
         };
-        const validateStep5 = () => {
-          const email = $("#insured_email").value.trim();
+        // STEP 4: อีเมล + PDPA
+        const validateStep4 = () => {
+          const email = document.querySelector("#insured_email").value.trim();
           const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-          $("#err-email").classList.toggle("hidden", emailOk);
-          const pdpaOk = $("#consent_pdpa").checked;
-          $("#err-pdpa").classList.toggle("hidden", pdpaOk);
+          document
+            .querySelector("#err-email")
+            .classList.toggle("hidden", emailOk);
+          const pdpaOk = document.querySelector("#consent_pdpa").checked;
+          document
+            .querySelector("#err-pdpa")
+            .classList.toggle("hidden", pdpaOk);
           return emailOk && pdpaOk;
         };
 
         /* ---------- Navigation ---------- */
-        $("#btn-next").addEventListener("click", () => {
+        document.querySelector("#btn-next").addEventListener("click", () => {
           if (state.step === 1 && !validateStep1()) return;
           if (state.step === 2 && !validateStep2()) return;
           if (state.step === 3 && !validateStep3()) return;
-          if (state.step === 4 && !validateStep4()) return;
           showStep(state.step + 1);
         });
+
         $("#btn-back").addEventListener("click", () =>
           showStep(state.step - 1)
         );
@@ -715,7 +720,7 @@
         /* ---------- Submit ---------- */
         $("#btn-submit").addEventListener("click", async () => {
           if (state.submitting || state.submitted) return;
-          if (!validateStep5()) return;
+          if (!validateStep4()) return;
           const payload = collectPayload();
           payload.source = Object.assign({}, payload.source, {
             page: "lead-capture",
