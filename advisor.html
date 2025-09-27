@@ -692,23 +692,31 @@
 
         (function buildPlans() {
           const el = $("#plan_code");
-          el.insertAdjacentHTML(
-            "beforeend",
-            '<option value="" selected disabled>เลือกแบบประกัน</option>'
-          );
-          PLANS.forEach((p) =>
-            el.insertAdjacentHTML(
-              "beforeend",
-              `<option value="${p.code}">${p.name}</option>`
-            )
-          );
+          el.innerHTML =
+            '<option value="" selected disabled>เลือกแบบประกัน</option>';
+
+          ensureDataset().then(() => {
+            const arr = state.dataset?.plans || state.dataset?.products || [];
+            arr.forEach((p) => {
+              const key = p.planKey || p.code || p.id;
+              const name = p.planName || p.name || key;
+              if (key)
+                el.insertAdjacentHTML(
+                  "beforeend",
+                  `<option value="${key}">${name}</option>`
+                );
+            });
+
+            // ถ้ามีค่าที่ prefill ไว้อยู่แล้ว ให้ trigger change อีกรอบ
+            if (el.value) el.dispatchEvent(new Event("change"));
+          });
+
           el.addEventListener("change", async () => {
-            const sel = PLANS.find((p) => p.code === el.value);
-            $("#plan_name").value = sel ? sel.name : "";
-            $("#plan-note").textContent = sel?.note || "";
+            const plan = state.plansByKey.get(el.value);
+            $("#plan_name").value = plan?.planName || plan?.name || "";
+            $("#plan-note").textContent = plan?.note || plan?.description || "";
             try {
               await ensureDataset();
-              const plan = state.plansByKey.get(el.value);
               updatePlanUI(plan);
             } catch {}
             updatePreview();
@@ -924,16 +932,24 @@
           const planCodeQS = qs.get("plan.code");
           const planNameQS = qs.get("plan.name");
           const planSel = $("#plan_code");
-          if (planCodeQS && PLANS.some((p) => p.code === planCodeQS)) {
-            planSel.value = planCodeQS;
-            planSel.dispatchEvent(new Event("change"));
-          } else if (planNameQS) {
-            const hit = PLANS.find((p) => p.name === planNameQS);
-            if (hit) {
-              planSel.value = hit.code;
+
+          ensureDataset().then(() => {
+            if (planCodeQS && state.plansByKey.has(planCodeQS)) {
+              planSel.value = planCodeQS;
               planSel.dispatchEvent(new Event("change"));
+            } else if (planNameQS) {
+              const arr = state.dataset?.plans || state.dataset?.products || [];
+              const hit = arr.find(
+                (p) => (p.planName || p.name) === planNameQS
+              );
+              if (hit) {
+                const key = hit.planKey || hit.code || hit.id;
+                planSel.value = key;
+                planSel.dispatchEvent(new Event("change"));
+              }
             }
-          }
+          });
+
           if (qs.get("sa")) $("#plan_sumAssured").value = qs.get("sa");
           if (qs.get("gender")) {
             $("#insured_gender").value = qs.get("gender");
