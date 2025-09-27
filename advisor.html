@@ -449,134 +449,6 @@
           quote: null,
         };
 
-        const setProgress = () => {
-          $("#progress").style.width = (state.step / state.maxStep) * 100 + "%";
-          $("#btn-back").classList.toggle("hidden", state.step === 1);
-          $("#btn-next").classList.toggle(
-            "hidden",
-            state.step === state.maxStep
-          );
-          $("#btn-submit").classList.toggle(
-            "hidden",
-            state.step !== state.maxStep
-          );
-          updateNextState();
-        };
-        const updateNextState = () => {
-          const btn = $("#btn-next");
-          if (state.step === 2) {
-            const ok = !!(state.quote && Number.isFinite(state.quote.annual));
-            btn.disabled = !ok;
-          } else {
-            btn.disabled = false;
-          }
-        };
-        const showStep = (i) => {
-          state.step = clamp(i, 1, state.maxStep);
-          $$(".step").forEach((s) => s.classList.add("hidden"));
-          $(`#step-${state.step}`).classList.remove("hidden");
-          $("#step-success").classList.add("hidden");
-          setProgress();
-          location.hash = "#/step/" + state.step;
-          updatePreview();
-          if (state.step === 2) ensureDataset().then(() => debouncedRecalc());
-          if (state.step === 3) syncADBwithSA();
-        };
-
-        /* ---------- Build selects ---------- */
-        // DOB selects
-        (function buildDOB() {
-          const dSel = $("#insured_dob_d");
-          let dOps = "";
-          for (let i = 1; i <= 31; i++)
-            dOps += `<option value="${i}">${i}</option>`;
-          dSel.innerHTML = dOps;
-          const mSel = $("#insured_dob_m");
-          let mOps = "";
-          for (let i = 1; i <= 12; i++)
-            mOps += `<option value="${i}">${i}</option>`;
-          mSel.innerHTML = mOps;
-          const ySel = $("#insured_dob_y");
-          const now = new Date();
-          const thisY = now.getFullYear();
-          const minY = thisY - 70,
-            maxY = thisY - 1;
-          let yOps = "";
-          for (let y = maxY; y >= minY; y--)
-            yOps += `<option value="${y}">${y}</option>`;
-          ySel.innerHTML = yOps;
-          [dSel, mSel, ySel].forEach((el) =>
-            el.addEventListener("change", debouncedRecalc)
-          );
-        })();
-
-        // Plans dropdown
-        (function buildPlans() {
-          const el = $("#plan_code");
-          el.insertAdjacentHTML(
-            "beforeend",
-            '<option value="" selected disabled>เลือกแบบประกัน</option>'
-          );
-          PLANS.forEach((p) =>
-            el.insertAdjacentHTML(
-              "beforeend",
-              `<option value="${p.code}">${p.name}</option>`
-            )
-          );
-          el.addEventListener("change", async () => {
-            const sel = PLANS.find((p) => p.code === el.value);
-            $("#plan_name").value = sel ? sel.name : "";
-            $("#plan-note").textContent = sel?.note || "";
-            try {
-              await ensureDataset();
-              const plan = state.plansByKey.get(el.value);
-              updatePlanUI(plan);
-            } catch {}
-            updatePreview();
-            debouncedRecalc();
-          });
-        })();
-
-        // Riders dropdowns
-        const buildOptions = (el, arr) => {
-          el.innerHTML = "";
-          arr.forEach((v) =>
-            el.insertAdjacentHTML(
-              "beforeend",
-              `<option value="${v}">${v || "ไม่เลือก"}</option>`
-            )
-          );
-        };
-        buildOptions($("#rider_hsa_cover"), RIDER_HSA);
-        buildOptions($("#rider_hb_cover"), RIDER_HB);
-        buildOptions($("#rider_opd_cover"), RIDER_OPD);
-        buildOptions($("#rider_lt_term"), RIDER_LT);
-
-        /* ---------- Gender segmented ---------- */
-        $$(".gender-btn").forEach((btn) =>
-          btn.addEventListener("click", () => {
-            $("#insured_gender").value = btn.dataset.gender;
-            toggleButtons($$(".gender-btn"), btn.dataset.gender);
-            updatePreview();
-            debouncedRecalc();
-          })
-        );
-
-        /* ---------- SA chips ---------- */
-        $$(".sa-chip").forEach((ch) =>
-          ch.addEventListener("click", () => {
-            $("#plan_sumAssured").value = ch.dataset.sa;
-            syncADBwithSA();
-            updatePreview();
-            debouncedRecalc();
-          })
-        );
-        $("#plan_sumAssured").addEventListener("input", () => {
-          syncADBwithSA();
-          updatePreview();
-          debouncedRecalc();
-        });
-
         const toggleButtons = (els, activeValue) => {
           els.forEach((btn) => {
             const on = btn.dataset.gender === activeValue;
@@ -628,7 +500,7 @@
           state.dataset = data;
           return data;
         }
-        const lookupRate = (plan, age, sexMF) => {
+        function lookupRate(plan, age, sexMF) {
           if (plan.calculationType === "fixedRatePer1000")
             return plan.fixedRate;
           const row = Array.isArray(plan.rates)
@@ -636,8 +508,8 @@
             : null;
           if (!row) return null;
           return sexMF === "male" ? row.male : row.female;
-        };
-        const applyDiscountPerThousand = (plan, sa, ratePerThousand) => {
+        }
+        function applyDiscountPerThousand(plan, sa, ratePerThousand) {
           const ds = Array.isArray(plan.discounts) ? plan.discounts : [];
           if (!ds.length) return ratePerThousand;
           const sorted = [...ds].sort(
@@ -649,8 +521,8 @@
           }
           const eff = ratePerThousand - disc;
           return eff < 0 ? 0 : eff;
-        };
-        const computeAnnualPremium = (plan, sexMF, age, sa) => {
+        }
+        function computeAnnualPremium(plan, sexMF, age, sa) {
           const minA = plan?.ageRange?.min ?? 0;
           const maxA = plan?.ageRange?.max ?? 200;
           if (age < minA || age > maxA)
@@ -671,47 +543,8 @@
           const rateEff = applyDiscountPerThousand(plan, sa, baseRate);
           const annual = ceilTo((sa / 1000) * rateEff, 1);
           return { baseRate, rateEff, annual };
-        };
-
-        function renderQuote({ plan, sa, quote, error } = {}) {
-          const box = $("#quote-box");
-          if (error) {
-            box.classList.remove("hidden");
-            box.innerHTML = `<div class="text-sm text-rose-700">${error}</div>`;
-            return;
-          }
-          if (!quote || !Number.isFinite(quote.annual)) {
-            box.classList.add("hidden");
-            box.innerHTML = "";
-            return;
-          }
-          box.classList.remove("hidden");
-          box.innerHTML = `<div class="flex items-center justify-between mb-2"><div class="text-sm text-brand-600">เบี้ยรายปี (ประมาณการ)</div><div class="text-lg font-semibold">${formatTHB(
-            quote.annual
-          )} บาท</div></div><div class="grid grid-cols-2 gap-2 text-xs text-brand-600"><div>อายุที่ใช้คำนวณ: <span class="font-medium">${
-            quote.age
-          } ปี</span></div><div>ทุนเอาประกัน: <span class="font-medium">${formatTHB(
-            sa
-          )} บาท</span></div><div>อัตราฐาน/1000: <span class="font-medium">${formatTHB(
-            quote.baseRate
-          )}</span></div><div>อัตราหลังส่วนลด: <span class="font-medium">${formatTHB(
-            quote.rateEff
-          )}</span></div></div>`;
         }
-        const updatePlanUI = (plan) => {
-          if (!plan) return;
-          const min = Number(plan.minSumAssured || 0);
-          const chip =
-            document.getElementById("chip-min") ||
-            document.querySelector(".sa-chip");
-          if (chip) {
-            chip.dataset.sa = String(min);
-            chip.textContent = formatTHB(min);
-          }
-          const hint = document.getElementById("sum-hint");
-          if (hint)
-            hint.textContent = min ? `ขั้นต่ำ: ${formatTHB(min)} บาท` : "";
-        };
+
         const debounce = (fn, wait = 350) => {
           let t;
           return (...a) => {
@@ -757,6 +590,168 @@
           }
         }
         const debouncedRecalc = debounce(recalc, 350);
+
+        function renderQuote({ plan, sa, quote, error } = {}) {
+          const box = $("#quote-box");
+          if (error) {
+            box.classList.remove("hidden");
+            box.innerHTML = `<div class="text-sm text-rose-700">${error}</div>`;
+            return;
+          }
+          if (!quote || !Number.isFinite(quote.annual)) {
+            box.classList.add("hidden");
+            box.innerHTML = "";
+            return;
+          }
+          box.classList.remove("hidden");
+          box.innerHTML = `<div class=\"flex items-center justify-between mb-2\"><div class=\"text-sm text-brand-600\">เบี้ยรายปี (ประมาณการ)</div><div class=\"text-lg font-semibold\">${formatTHB(
+            quote.annual
+          )} บาท</div></div><div class=\"grid grid-cols-2 gap-2 text-xs text-brand-600\"><div>อายุที่ใช้คำนวณ: <span class=\"font-medium\">${
+            quote.age
+          } ปี</span></div><div>ทุนเอาประกัน: <span class=\"font-medium\">${formatTHB(
+            sa
+          )} บาท</span></div><div>อัตราฐาน/1000: <span class=\"font-medium\">${formatTHB(
+            quote.baseRate
+          )}</span></div><div>อัตราหลังส่วนลด: <span class=\"font-medium\">${formatTHB(
+            quote.rateEff
+          )}</span></div></div>`;
+        }
+        const updatePlanUI = (plan) => {
+          if (!plan) return;
+          const min = Number(plan.minSumAssured || 0);
+          const chip =
+            document.getElementById("chip-min") ||
+            document.querySelector(".sa-chip");
+          if (chip) {
+            chip.dataset.sa = String(min);
+            chip.textContent = formatTHB(min);
+          }
+          const hint = document.getElementById("sum-hint");
+          if (hint)
+            hint.textContent = min ? `ขั้นต่ำ: ${formatTHB(min)} บาท` : "";
+        };
+
+        const setProgress = () => {
+          $("#progress").style.width = (state.step / state.maxStep) * 100 + "%";
+          $("#btn-back").classList.toggle("hidden", state.step === 1);
+          $("#btn-next").classList.toggle(
+            "hidden",
+            state.step === state.maxStep
+          );
+          $("#btn-submit").classList.toggle(
+            "hidden",
+            state.step !== state.maxStep
+          );
+          updateNextState();
+        };
+        const updateNextState = () => {
+          const btn = $("#btn-next");
+          if (state.step === 2) {
+            const ok = !!(state.quote && Number.isFinite(state.quote.annual));
+            btn.disabled = !ok;
+          } else {
+            btn.disabled = false;
+          }
+        };
+        const showStep = (i) => {
+          state.step = clamp(i, 1, state.maxStep);
+          $$(".step").forEach((s) => s.classList.add("hidden"));
+          $(`#step-${state.step}`).classList.remove("hidden");
+          $("#step-success").classList.add("hidden");
+          setProgress();
+          location.hash = "#/step/" + state.step;
+          updatePreview();
+          if (state.step === 2) ensureDataset().then(() => debouncedRecalc());
+          if (state.step === 3) syncADBwithSA();
+        };
+
+        (function buildDOB() {
+          const dSel = $("#insured_dob_d");
+          let dOps = "";
+          for (let i = 1; i <= 31; i++)
+            dOps += `<option value="${i}">${i}</option>`;
+          dSel.innerHTML = dOps;
+          const mSel = $("#insured_dob_m");
+          let mOps = "";
+          for (let i = 1; i <= 12; i++)
+            mOps += `<option value="${i}">${i}</option>`;
+          mSel.innerHTML = mOps;
+          const ySel = $("#insured_dob_y");
+          const now = new Date();
+          const thisY = now.getFullYear();
+          const minY = thisY - 70,
+            maxY = thisY - 1;
+          let yOps = "";
+          for (let y = maxY; y >= minY; y--)
+            yOps += `<option value="${y}">${y}</option>`;
+          ySel.innerHTML = yOps;
+          [dSel, mSel, ySel].forEach((el) =>
+            el.addEventListener("change", debouncedRecalc)
+          );
+        })();
+
+        (function buildPlans() {
+          const el = $("#plan_code");
+          el.insertAdjacentHTML(
+            "beforeend",
+            '<option value="" selected disabled>เลือกแบบประกัน</option>'
+          );
+          PLANS.forEach((p) =>
+            el.insertAdjacentHTML(
+              "beforeend",
+              `<option value="${p.code}">${p.name}</option>`
+            )
+          );
+          el.addEventListener("change", async () => {
+            const sel = PLANS.find((p) => p.code === el.value);
+            $("#plan_name").value = sel ? sel.name : "";
+            $("#plan-note").textContent = sel?.note || "";
+            try {
+              await ensureDataset();
+              const plan = state.plansByKey.get(el.value);
+              updatePlanUI(plan);
+            } catch {}
+            updatePreview();
+            debouncedRecalc();
+          });
+        })();
+
+        const buildOptions = (el, arr) => {
+          el.innerHTML = "";
+          arr.forEach((v) =>
+            el.insertAdjacentHTML(
+              "beforeend",
+              `<option value="${v}">${v || "ไม่เลือก"}</option>`
+            )
+          );
+        };
+        buildOptions($("#rider_hsa_cover"), RIDER_HSA);
+        buildOptions($("#rider_hb_cover"), RIDER_HB);
+        buildOptions($("#rider_opd_cover"), RIDER_OPD);
+        buildOptions($("#rider_lt_term"), RIDER_LT);
+
+        $$(".gender-btn").forEach((btn) =>
+          btn.addEventListener("click", () => {
+            $("#insured_gender").value = btn.dataset.gender;
+            toggleButtons($$(".gender-btn"), btn.dataset.gender);
+            updatePreview();
+            debouncedRecalc();
+          })
+        );
+
+        $$(".sa-chip").forEach((ch) =>
+          ch.addEventListener("click", () => {
+            $("#plan_sumAssured").value = ch.dataset.sa;
+            syncADBwithSA();
+            updatePreview();
+            debouncedRecalc();
+          })
+        );
+        $("#plan_sumAssured").addEventListener("input", () => {
+          syncADBwithSA();
+          updatePreview();
+          debouncedRecalc();
+        });
 
         function setADBHints() {
           const sa = Number($("#plan_sumAssured").value || 0);
@@ -834,7 +829,7 @@
           $("#err-dob").classList.toggle("hidden", dobOk);
           return gOk && dobOk;
         };
-        // STEP 2: แผน
+        // STEP 2: แผนประกัน + ทุน + เบี้ย
         const validateStep2 = () => {
           const planOk = !!$("#plan_code").value;
           $("#err-plan").classList.toggle("hidden", planOk);
@@ -998,6 +993,10 @@
             };
             const a3 = computeAnnualPremium(mockPlan3, "male", 30, 500000);
             console.assert(a3.annual === 4000, "discount ladder");
+            console.assert(
+              typeof debouncedRecalc === "function",
+              "debouncedRecalc is function"
+            );
           } catch (e) {
             console.warn("selfTests failed", e);
           }
