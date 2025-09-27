@@ -420,7 +420,13 @@
         const formatTHB = (n) => (Number(n) || 0).toLocaleString("th-TH");
 
         /* ---------- State ---------- */
-        const state = { step: 1, maxStep: 5, adbOn: false };
+        const state = {
+          step: 1,
+          maxStep: 5,
+          adbOn: false,
+          submitting: false,
+          submitted: false,
+        };
 
         const setProgress = () => {
           $("#progress").style.width = (state.step / state.maxStep) * 100 + "%";
@@ -606,8 +612,8 @@
           const payload = collectPayload();
           const box = $("#preview-box");
           $("#preview").textContent = JSON.stringify(payload, null, 2);
-          if (qs.get("debug") === "1") box.hidden = false; // show only in debug
-        };
+          if (qs.get("debug") === "1") box.hidden = false;
+        }; // show only in debug
 
         /* ---------- Validation per step ---------- */
         const validateStep1 = () => {
@@ -708,13 +714,14 @@
 
         /* ---------- Submit ---------- */
         $("#btn-submit").addEventListener("click", async () => {
+          if (state.submitting || state.submitted) return;
           if (!validateStep5()) return;
           const payload = collectPayload();
           payload.source = Object.assign({}, payload.source, {
             page: "lead-capture",
             userAgent: navigator.userAgent,
           });
-
+          state.submitting = true;
           $("#btn-submit").disabled = true;
           $("#btn-submit").textContent = "กำลังส่ง...";
           try {
@@ -723,21 +730,29 @@
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify(payload),
             });
-
             const data = await res.json().catch(() => ({}));
             const ok = res.ok && data.ok !== false;
             if (!ok) throw new Error(data.message || "Submit failed");
+            state.submitted = true;
             $("#success-email").textContent = payload?.insured?.email || "";
             $("#success-lead").textContent = data?.lead?.id || "-";
             $$(".step").forEach((s) => s.classList.add("hidden"));
             $("#step-success").classList.remove("hidden");
             setProgress();
+            document.querySelector("footer")?.classList.add("hidden");
           } catch (e) {
-            alert("ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+            alert(
+              "ส่งข้อมูลไม่สำเร็จ: " + (e.message || "กรุณาลองใหม่อีกครั้ง")
+            );
             console.error(e);
           } finally {
-            $("#btn-submit").disabled = false;
-            $("#btn-submit").textContent = "ขอใบเสนอราคา";
+            state.submitting = false;
+            if (!state.submitted) {
+              $("#btn-submit").disabled = false;
+              $("#btn-submit").textContent = "ขอใบเสนอราคา";
+            } else {
+              $("#btn-submit").disabled = true;
+            }
           }
         });
 
