@@ -64,22 +64,46 @@
     refNode?.parentNode?.insertBefore(newNode, refNode.nextSibling);
   }
 
-  function findHeaderAnchor() {
-    const scope = document.querySelector("app-eappdet") || document.body;
+  function debounce(fn, wait = 120) {
+    let t;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(null, args), wait);
+    };
+  }
+
+  function selectHeaderCandidate() {
+    const scope = document.body;
     const sels = [
-      "app-appheader",
       "app-eappheader",
+      "app-appheader",
       "app-header",
+      "nav.navbar",
       ".navbar",
       "header",
-      ".card-header",
-      '[class*="header"]',
     ];
+    const nodes = [];
     for (const s of sels) {
-      const node = scope.querySelector(s);
-      if (isVisible(node)) return node;
+      nodes.push(...scope.querySelectorAll(s));
     }
-    return scope.firstElementChild || document.body.firstElementChild;
+    const candidates = nodes.filter((n) => {
+      if (!isVisible(n)) return false;
+      const cls = (n.className || "").toString();
+      // ตัดหัวการ์ดภายในคอนเทนต์ออก (เช่น Form Conditions)
+      if (/card-header/i.test(cls)) return false;
+      const rect = n.getBoundingClientRect();
+      const vw = Math.max(
+        document.documentElement.clientWidth,
+        window.innerWidth || 0
+      );
+      // ต้องกว้างพอ (อย่างน้อย 50% ของ viewport) และอยู่ใกล้ด้านบนของหน้า
+      return rect.width >= vw * 0.5 && rect.top < 300;
+    });
+    if (!candidates.length) return null;
+    candidates.sort(
+      (a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top
+    );
+    return candidates[0];
   }
 
   // ---- UI state --------------------------------------------------------
@@ -224,10 +248,23 @@
     );
     $("#af-clear-page").addEventListener("click", () => emit("clear:page"));
 
-    // mount under header
-    const anchor = findHeaderAnchor();
-    if (anchor) insertAfter(host, anchor);
-    else document.body.prepend(host);
+    // mount under navbar (robust)
+    function placeToolbar() {
+      const anchor = selectHeaderCandidate();
+      if (anchor) {
+        if (host.previousElementSibling !== anchor) insertAfter(host, anchor);
+      } else if (!host.parentNode) {
+        document.body.prepend(host);
+      }
+    }
+    placeToolbar();
+
+    // keep toolbar under navbar during SPA/DOM mutations
+    const schedule = debounce(placeToolbar, 120);
+    const mo = new MutationObserver(() => schedule());
+    mo.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("resize", schedule);
+    window.addEventListener("load", schedule);
 
     state.mounted = true;
   }
@@ -260,7 +297,9 @@
           ? objOrStr
           : JSON.stringify(objOrStr, null, 2);
       setLog(
-        pretty.length > 5000 ? pretty.slice(0, 5000) + "…(truncated)" : pretty
+        pretty.length > 5000
+          ? pretty.slice(0, 5000) + "\n...(truncated)"
+          : pretty
       );
     } catch {
       setLog(String(objOrStr));
