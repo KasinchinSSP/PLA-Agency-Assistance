@@ -7,14 +7,14 @@
 // @run-at       document-idle
 // @grant        none
 // @noframes
-// @require https://kasinchinssp.github.io/PLA-Agency-Assistance/iAPPLY/core/ui.js
+// @require https://kasinchinssp.github.io/PLA-Agency-Assistance/iAPPLY/core/ui.js?v=2025-10-05b
 // ==/UserScript==
 
 /* eslint-env browser */
 /* global IAF */
 
 (() => {
-  // รอให้โมดูล UI (@require) โหลดสำเร็จ (กันทั้ง lint และ race ตอนโหลด)
+  // Wait until ui.js is available (avoids race & clears lint "no-undef")
   async function waitForIAFUI(timeoutMs = 8000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -39,10 +39,10 @@
       return;
     }
 
-    // วางทูลบาร์ใต้ Header
+    // Place toolbar under header
     IAF.ui.mountToolbar({ version: "0.2", appName: "iAPPLY AutoFill" });
 
-    // ตั้งค่าเริ่มต้น
+    // Initial UI state
     IAF.ui.setStatus("waiting for JSON");
     IAF.ui.setPage("Detecting...");
     IAF.ui.setButtons({
@@ -53,7 +53,7 @@
       clearPage: false,
     });
 
-    // เดโมการตรวจหน้า (ง่ายๆ — แค่โชว์ข้อความ)
+    // Basic page detection demo
     const detectPage = () => {
       const isQ13 = !!document.querySelector("app-apppart1");
       const isCond = !!document.querySelector(
@@ -68,7 +68,7 @@
       subtree: true,
     });
 
-    // ผูกอีเวนต์จาก UI (โหมดทดสอบ: แค่ log/ปรับ status)
+    // Wire UI events (stub only)
     IAF.ui.on("json:loaded", ({ json, text }) => {
       const jok = !!json;
       IAF.ui.setStatus(jok ? "JSON ready" : "JSON parse error");
@@ -80,7 +80,7 @@
     IAF.ui.on("preview", ({ safeMode }) => {
       IAF.ui.setStatus(`preview (safe=${safeMode})`);
       IAF.ui.setLog(
-        "*** Preview stub ***ยังไม่มีปลั๊กอินกรอกจริงในโหมดทดสอบนี้"
+        "*** Preview stub ***\nยังไม่มีปลั๊กอินกรอกจริงในโหมดทดสอบนี้"
       );
     });
 
