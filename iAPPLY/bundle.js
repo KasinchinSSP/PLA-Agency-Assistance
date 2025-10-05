@@ -23,8 +23,9 @@
         window.IAF &&
         window.IAF.ui &&
         typeof window.IAF.ui.mountToolbar === "function"
-      )
+      ) {
         return true;
+      }
       await new Promise((r) => setTimeout(r, 50));
     }
     return false;
