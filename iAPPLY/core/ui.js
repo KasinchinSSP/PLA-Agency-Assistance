@@ -8,15 +8,15 @@
  *  - Show Status, Page, and Logs (collapsible)
  *  - Emit high-level events for core/plugins; NO autofill logic here
  *
- * Usage:
+ * Usage (example):
  *   // in bundle.user.js after @require this file
  *   IAF.ui.mountToolbar({ version: '0.2', appName: 'iAPPLY AutoFill' });
- *   IAF.ui.on('json:loaded', ({ json, text }) => { /* validate / store */ });
- *   IAF.ui.on('preview', ({ safeMode }) => { /* call registry.active().dryRun() */ });
- *   IAF.ui.on('fill',    ({ safeMode }) => { /* call registry.active().fill()   */ });
- *   IAF.ui.on('undo',    () => { /* core.undo.restoreAll() */ });
- *   IAF.ui.on('clear:changed', () => { /* clear only fields changed by script */ });
- *   IAF.ui.on('clear:page',    () => { /* clear all fillable on current page  */ });
+ *   IAF.ui.on('json:loaded', ({ json, text }) => { // validate & store });
+ *   IAF.ui.on('preview', ({ safeMode }) => { // call registry.active().dryRun(json, ctx) });
+ *   IAF.ui.on('fill',    ({ safeMode }) => { // call registry.active().fill(json, ctx)   });
+ *   IAF.ui.on('undo',    () => { // core.undo.restoreAll() });
+ *   IAF.ui.on('clear:changed', () => { // clear only fields changed by script });
+ *   IAF.ui.on('clear:page',    () => { // clear all fillable on current page  });
  *
  * External setters (from core/plugins):
  *   IAF.ui.setStatus('JSON ready');
@@ -28,26 +28,57 @@
  * Responsive target: tablet 810×1080; scales down to mobile. Shadow DOM used to avoid CSS clashes.
  */
 
-(function(){
-  const IAF = (globalThis.IAF = globalThis.IAF || {});
+(function () {
+  const IAF = (window.IAF = window.IAF || {});
   if (IAF.ui) return; // don't redefine
 
   // ---- tiny event bus (UI-local) ---------------------------------------
   const listeners = new Map(); // evt -> Set<fn>
-  function on(evt, fn){ (listeners.get(evt) || listeners.set(evt,new Set()).get(evt)).add(fn); }
-  function off(evt, fn){ listeners.get(evt)?.delete(fn); }
-  function emit(evt, payload){ listeners.get(evt)?.forEach(fn => { try{ fn(payload); } catch(e){ console.error('[UI emit]', evt, e); } }); }
+  function on(evt, fn) {
+    (listeners.get(evt) || listeners.set(evt, new Set()).get(evt)).add(fn);
+  }
+  function off(evt, fn) {
+    listeners.get(evt)?.delete(fn);
+  }
+  function emit(evt, payload) {
+    listeners.get(evt)?.forEach((fn) => {
+      try {
+        fn(payload);
+      } catch (e) {
+        console.error("[UI emit]", evt, e);
+      }
+    });
+  }
 
   // ---- helpers ---------------------------------------------------------
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-  function el(root, sel){ return root.querySelector(sel); }
-  function isVisible(dom){ if(!dom) return false; const r = dom.getBoundingClientRect(); return r.width>0 && r.height>0; }
-  function insertAfter(newNode, refNode){ refNode?.parentNode?.insertBefore(newNode, refNode.nextSibling); }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  function el(root, sel) {
+    return root.querySelector(sel);
+  }
+  function isVisible(dom) {
+    if (!dom) return false;
+    const r = dom.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
+  function insertAfter(newNode, refNode) {
+    refNode?.parentNode?.insertBefore(newNode, refNode.nextSibling);
+  }
 
-  function findHeaderAnchor(){
-    const scope = document.querySelector('app-eappdet') || document.body;
-    const sels = ['app-appheader','app-eappheader','app-header','.navbar','header','.card-header','[class*="header"]'];
-    for(const s of sels){ const node = scope.querySelector(s); if(isVisible(node)) return node; }
+  function findHeaderAnchor() {
+    const scope = document.querySelector("app-eappdet") || document.body;
+    const sels = [
+      "app-appheader",
+      "app-eappheader",
+      "app-header",
+      ".navbar",
+      "header",
+      ".card-header",
+      '[class*="header"]',
+    ];
+    for (const s of sels) {
+      const node = scope.querySelector(s);
+      if (isVisible(node)) return node;
+    }
     return scope.firstElementChild || document.body.firstElementChild;
   }
 
@@ -56,36 +87,41 @@
     mounted: false,
     safeMode: true,
     json: null,
-    jsonText: '',
-    version: '0.2',
-    appName: 'iAPPLY AutoFill',
+    jsonText: "",
+    version: "0.2",
+    appName: "iAPPLY AutoFill",
   };
 
   // ---- API surface -----------------------------------------------------
   const api = {
     mountToolbar,
-    setStatus, setPage, setLog, showJSONPreview, setButtons,
-    on, off,
-    getSafeMode: () => state.safeMode
+    setStatus,
+    setPage,
+    setLog,
+    showJSONPreview,
+    setButtons,
+    on,
+    off,
+    getSafeMode: () => state.safeMode,
   };
 
-  Object.defineProperty(IAF, 'ui', { value: api, writable: false });
+  Object.defineProperty(IAF, "ui", { value: api, writable: false });
 
   // ---- implementation --------------------------------------------------
-  function mountToolbar(opts={}){
+  function mountToolbar(opts = {}) {
     if (state.mounted) return;
     state.version = opts.version || state.version;
     state.appName = opts.appName || state.appName;
 
     // host
-    const host = document.createElement('div');
-    host.id = '__iapply_af_toolbar_host__';
-    host.style.display = 'block';
-    host.style.position = 'sticky';
-    host.style.top = '0';
-    host.style.zIndex = '99998';
+    const host = document.createElement("div");
+    host.id = "__iapply_af_toolbar_host__";
+    host.style.display = "block";
+    host.style.position = "sticky";
+    host.style.top = "0";
+    host.style.zIndex = "99998";
 
-    const root = host.attachShadow({ mode: 'open' });
+    const root = host.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>
         :host { all: initial; }
@@ -144,72 +180,108 @@
 
     // wire
     const $ = (s) => el(root, s);
-    $('#brand').textContent = `${state.appName} v${state.version}`;
+    $("#brand").textContent = `${state.appName} v${state.version}`;
 
-    $('#af-safe').addEventListener('change', (e) => { state.safeMode = !!e.target.checked; emit('ui:safeMode', { safeMode: state.safeMode }); });
+    $("#af-safe").addEventListener("change", (e) => {
+      state.safeMode = !!e.target.checked;
+      emit("ui:safeMode", { safeMode: state.safeMode });
+    });
 
-    $('#af-file').addEventListener('change', async (e) => {
-      const file = e.target.files?.[0]; if(!file) return;
-      try{
+    $("#af-file").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
         const text = await file.text();
-        let json = null; try{ json = JSON.parse(text); }catch(_){ json = null; }
-        state.json = json; state.jsonText = text;
-        setStatus(json ? 'JSON ready' : 'JSON loaded (parse failed)');
+        let json = null;
+        try {
+          json = JSON.parse(text);
+        } catch (_) {
+          json = null;
+        }
+        state.json = json;
+        state.jsonText = text;
+        setStatus(json ? "JSON ready" : "JSON loaded (parse failed)");
         showJSONPreview(json ?? text);
         setButtons({ preview: !!json, fill: !!json });
-        emit('json:loaded', { json, text });
-      }catch(err){ setStatus('JSON read error'); setLog(String(err?.message||err)); }
+        emit("json:loaded", { json, text });
+      } catch (err) {
+        setStatus("JSON read error");
+        setLog(String(err?.message || err));
+      }
     });
 
-    $('#af-preview').addEventListener('click', () => {
-      emit('preview', { safeMode: state.safeMode });
+    $("#af-preview").addEventListener("click", () => {
+      emit("preview", { safeMode: state.safeMode });
     });
 
-    $('#af-fill').addEventListener('click', () => {
-      emit('fill', { safeMode: state.safeMode });
+    $("#af-fill").addEventListener("click", () => {
+      emit("fill", { safeMode: state.safeMode });
     });
 
-    $('#af-undo').addEventListener('click', () => emit('undo'));
-    $('#af-clear-changed').addEventListener('click', () => emit('clear:changed'));
-    $('#af-clear-page').addEventListener('click', () => emit('clear:page'));
+    $("#af-undo").addEventListener("click", () => emit("undo"));
+    $("#af-clear-changed").addEventListener("click", () =>
+      emit("clear:changed")
+    );
+    $("#af-clear-page").addEventListener("click", () => emit("clear:page"));
 
     // mount under header
     const anchor = findHeaderAnchor();
-    if(anchor) insertAfter(host, anchor); else document.body.prepend(host);
+    if (anchor) insertAfter(host, anchor);
+    else document.body.prepend(host);
 
     state.mounted = true;
   }
 
-  function setStatus(s){
-    const root = document.getElementById('__iapply_af_toolbar_host__')?.shadowRoot; if(!root) return;
-    el(root, '#af-status').textContent = `status: ${s}`;
+  function setStatus(s) {
+    const root = document.getElementById(
+      "__iapply_af_toolbar_host__"
+    )?.shadowRoot;
+    if (!root) return;
+    el(root, "#af-status").textContent = `status: ${s}`;
   }
-  function setPage(p){
-    const root = document.getElementById('__iapply_af_toolbar_host__')?.shadowRoot; if(!root) return;
-    el(root, '#af-page').textContent = `page: ${p}`;
+  function setPage(p) {
+    const root = document.getElementById(
+      "__iapply_af_toolbar_host__"
+    )?.shadowRoot;
+    if (!root) return;
+    el(root, "#af-page").textContent = `page: ${p}`;
   }
-  function setLog(txt){
-    const root = document.getElementById('__iapply_af_toolbar_host__')?.shadowRoot; if(!root) return;
-    el(root, '#af-log').textContent = String(txt ?? '');
+  function setLog(txt) {
+    const root = document.getElementById(
+      "__iapply_af_toolbar_host__"
+    )?.shadowRoot;
+    if (!root) return;
+    el(root, "#af-log").textContent = String(txt ?? "");
   }
-  function showJSONPreview(objOrStr){
-    try{
-      const pretty = typeof objOrStr === 'string' ? objOrStr : JSON.stringify(objOrStr, null, 2);
-      setLog(pretty.length > 5000 ? pretty.slice(0,5000) + '\n…(truncated)' : pretty);
-    }catch{ setLog(String(objOrStr)); }
+  function showJSONPreview(objOrStr) {
+    try {
+      const pretty =
+        typeof objOrStr === "string"
+          ? objOrStr
+          : JSON.stringify(objOrStr, null, 2);
+      setLog(
+        pretty.length > 5000 ? pretty.slice(0, 5000) + "…(truncated)" : pretty
+      );
+    } catch {
+      setLog(String(objOrStr));
+    }
   }
-  function setButtons(enabled={}){
-    const root = document.getElementById('__iapply_af_toolbar_host__')?.shadowRoot; if(!root) return;
+  function setButtons(enabled = {}) {
+    const root = document.getElementById(
+      "__iapply_af_toolbar_host__"
+    )?.shadowRoot;
+    if (!root) return;
     const map = {
-      preview: '#af-preview',
-      fill: '#af-fill',
-      undo: '#af-undo',
-      clearChanged: '#af-clear-changed',
-      clearPage: '#af-clear-page'
+      preview: "#af-preview",
+      fill: "#af-fill",
+      undo: "#af-undo",
+      clearChanged: "#af-clear-changed",
+      clearPage: "#af-clear-page",
     };
-    for(const [k, sel] of Object.entries(map)){
-      if (k in enabled){
-        const b = el(root, sel); if (b) b.disabled = !enabled[k];
+    for (const [k, sel] of Object.entries(map)) {
+      if (k in enabled) {
+        const b = el(root, sel);
+        if (b) b.disabled = !enabled[k];
       }
     }
   }
