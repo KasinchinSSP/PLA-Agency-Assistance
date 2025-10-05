@@ -90,7 +90,7 @@
       if (!isVisible(n)) return false;
       const cls = (n.className || "").toString();
       // ตัดหัวการ์ดภายในคอนเทนต์ออก (เช่น Form Conditions)
-      if (/card-header/i.test(cls)) return false;
+      if (/\bcard-header\b/i.test(cls)) return false;
       const rect = n.getBoundingClientRect();
       const vw = Math.max(
         document.documentElement.clientWidth,
